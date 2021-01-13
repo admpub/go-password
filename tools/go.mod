@@ -1,4 +1,4 @@
-module github.com/sethvargo/go-password/tools
+module github.com/admpub/go-password/tools
 
 go 1.14
 
