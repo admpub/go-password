@@ -1,7 +1,7 @@
 ## Golang Password Generator
 
-[![Build Status](https://travis-ci.org/sethvargo/go-password.svg?branch=master)](https://travis-ci.org/sethvargo/go-password)
-[![GoDoc](https://godoc.org/github.com/sethvargo/go-password?status.svg)](https://godoc.org/github.com/sethvargo/go-password)
+[![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://pkg.go.dev/github.com/sethvargo/go-password/password)
+[![GitHub Actions](https://img.shields.io/github/workflow/status/sethvargo/go-password/Test?style=flat-square)](https://github.com/sethvargo/go-password/actions?query=workflow%3ATest)
 
 This library implements generation of random passwords with provided
 requirements as described by  [AgileBits
@@ -51,6 +51,30 @@ func main() {
 
 See the [GoDoc](https://godoc.org/github.com/sethvargo/go-password) for more
 information.
+
+## Testing
+
+For testing purposes, instead of accepted a `*password.Generator` struct, accept
+a `password.PasswordGenerator` interface:
+
+```go
+// func MyFunc(p *password.Generator)
+func MyFunc(p password.PasswordGenerator) {
+  // ...
+}
+```
+
+Then, in tests, use a mocked password generator with stubbed data:
+
+```go
+func TestMyFunc(t *testing.T) {
+  gen := password.NewMockGenerator("canned-response", false)
+  MyFunc(gen)
+}
+```
+
+In this example, the mock generator will always return the value
+"canned-response", regardless of the provided parameters.
 
 ## License
 

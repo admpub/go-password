@@ -1,14 +1,28 @@
 package password
 
 import (
-	"log"
+	"io"
 	"strings"
+	"sync/atomic"
 	"testing"
+)
+
+type (
+	MockReader struct {
+		Counter int64
+	}
 )
 
 const (
 	N = 10000
 )
+
+func (mr *MockReader) Read(data []byte) (int, error) {
+	for i := 0; i < len(data); i++ {
+		data[i] = byte(atomic.AddInt64(&mr.Counter, 1))
+	}
+	return len(data), nil
+}
 
 func testHasDuplicates(tb testing.TB, s string) bool {
 	found := make(map[rune]struct{}, len(s))
@@ -21,10 +35,13 @@ func testHasDuplicates(tb testing.TB, s string) bool {
 	return false
 }
 
-func TestGenerator_Generate(t *testing.T) {
+func testGeneratorGenerate(t *testing.T, reader io.Reader) {
 	t.Parallel()
 
 	gen, err := NewGenerator(nil)
+	if reader != nil {
+		gen.reader = reader
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +126,15 @@ func TestGenerator_Generate(t *testing.T) {
 	})
 }
 
-func TestGenerator_Generate_Custom(t *testing.T) {
+func TestGeneratorGenerate(t *testing.T) {
+	testGeneratorGenerate(t, nil)
+}
+
+func TestGenerator_Reader_Generate(t *testing.T) {
+	testGeneratorGenerate(t, &MockReader{})
+}
+
+func testGeneratorGenerateCustom(t *testing.T, reader io.Reader) {
 	t.Parallel()
 
 	gen, err := NewGenerator(&GeneratorInput{
@@ -117,6 +142,7 @@ func TestGenerator_Generate_Custom(t *testing.T) {
 		UpperLetters: "ABCDE",
 		Symbols:      "!@#$%",
 		Digits:       "01234",
+		Reader:       reader,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -146,52 +172,10 @@ func TestGenerator_Generate_Custom(t *testing.T) {
 	}
 }
 
-func ExampleGenerate() {
-	res, err := Generate(64, 10, 10, false, false)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Print(res)
+func TestGeneratorGenerateCustom(t *testing.T) {
+	testGeneratorGenerateCustom(t, nil)
 }
 
-func ExampleMustGenerate() {
-	// Will panic on error
-	res := MustGenerate(64, 10, 10, false, false)
-	log.Print(res)
-}
-
-func ExampleGenerator_Generate() {
-	gen, err := NewGenerator(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	res, err := gen.Generate(64, 10, 10, false, false)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Print(res)
-}
-
-func ExampleNewGenerator_nil() {
-	// This is exactly the same as calling "Generate" directly. It will use all
-	// the default values.
-	gen, err := NewGenerator(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_ = gen // gen.Generate(...)
-}
-
-func ExampleNewGenerator_custom() {
-	// Customize the list of symbols.
-	gen, err := NewGenerator(&GeneratorInput{
-		Symbols: "!@#$%^()",
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_ = gen // gen.Generate(...)
+func TestGenerator_Reader_Generate_Custom(t *testing.T) {
+	testGeneratorGenerateCustom(t, &MockReader{})
 }

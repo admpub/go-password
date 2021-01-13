@@ -13,9 +13,21 @@ package password
 import (
 	"crypto/rand"
 	"errors"
+	"io"
 	"math/big"
 	"strings"
 )
+
+// Built-time checks that the generators implement the interface.
+var _ PasswordGenerator = (*Generator)(nil)
+
+// PasswordGenerator is an interface that implements the Generate function. This
+// is useful for testing where you can pass this interface instead of a real
+// password generator to mock responses for predicability.
+type PasswordGenerator interface {
+	Generate(int, int, int, bool, bool) (string, error)
+	MustGenerate(int, int, int, bool, bool) string
+}
 
 const (
 	// LowerLetters is the list of lowercase letters.
@@ -56,6 +68,7 @@ type Generator struct {
 	upperLetters string
 	digits       string
 	symbols      string
+	reader       io.Reader
 }
 
 // GeneratorInput is used as input to the NewGenerator function.
@@ -64,6 +77,7 @@ type GeneratorInput struct {
 	UpperLetters string
 	Digits       string
 	Symbols      string
+	Reader       io.Reader // rand.Reader by default
 }
 
 // NewGenerator creates a new Generator from the specified configuration. If no
@@ -79,6 +93,7 @@ func NewGenerator(i *GeneratorInput) (*Generator, error) {
 		upperLetters: i.UpperLetters,
 		digits:       i.Digits,
 		symbols:      i.Symbols,
+		reader:       i.Reader,
 	}
 
 	if g.lowerLetters == "" {
@@ -95,6 +110,10 @@ func NewGenerator(i *GeneratorInput) (*Generator, error) {
 
 	if g.symbols == "" {
 		g.symbols = Symbols
+	}
+
+	if g.reader == nil {
+		g.reader = rand.Reader
 	}
 
 	return g, nil
@@ -135,7 +154,7 @@ func (g *Generator) Generate(length, numDigits, numSymbols int, noUpper, allowRe
 
 	// Characters
 	for i := 0; i < chars; i++ {
-		ch, err := randomElement(letters)
+		ch, err := randomElement(g.reader, letters)
 		if err != nil {
 			return "", err
 		}
@@ -145,7 +164,7 @@ func (g *Generator) Generate(length, numDigits, numSymbols int, noUpper, allowRe
 			continue
 		}
 
-		result, err = randomInsert(result, ch)
+		result, err = randomInsert(g.reader, result, ch)
 		if err != nil {
 			return "", err
 		}
@@ -153,7 +172,7 @@ func (g *Generator) Generate(length, numDigits, numSymbols int, noUpper, allowRe
 
 	// Digits
 	for i := 0; i < numDigits; i++ {
-		d, err := randomElement(g.digits)
+		d, err := randomElement(g.reader, g.digits)
 		if err != nil {
 			return "", err
 		}
@@ -163,7 +182,7 @@ func (g *Generator) Generate(length, numDigits, numSymbols int, noUpper, allowRe
 			continue
 		}
 
-		result, err = randomInsert(result, d)
+		result, err = randomInsert(g.reader, result, d)
 		if err != nil {
 			return "", err
 		}
@@ -171,7 +190,7 @@ func (g *Generator) Generate(length, numDigits, numSymbols int, noUpper, allowRe
 
 	// Symbols
 	for i := 0; i < numSymbols; i++ {
-		sym, err := randomElement(g.symbols)
+		sym, err := randomElement(g.reader, g.symbols)
 		if err != nil {
 			return "", err
 		}
@@ -181,7 +200,7 @@ func (g *Generator) Generate(length, numDigits, numSymbols int, noUpper, allowRe
 			continue
 		}
 
-		result, err = randomInsert(result, sym)
+		result, err = randomInsert(g.reader, result, sym)
 		if err != nil {
 			return "", err
 		}
@@ -219,22 +238,22 @@ func MustGenerate(length, numDigits, numSymbols int, noUpper, allowRepeat bool) 
 }
 
 // randomInsert randomly inserts the given value into the given string.
-func randomInsert(s, val string) (string, error) {
+func randomInsert(reader io.Reader, s, val string) (string, error) {
 	if s == "" {
 		return val, nil
 	}
 
-	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(s)+1)))
+	n, err := rand.Int(reader, big.NewInt(int64(len(s)+1)))
 	if err != nil {
 		return "", err
 	}
 	i := n.Int64()
-	return s[0:i] + val + s[i:len(s)], nil
+	return s[0:i] + val + s[i:], nil
 }
 
 // randomElement extracts a random element from the given string.
-func randomElement(s string) (string, error) {
-	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(s))))
+func randomElement(reader io.Reader, s string) (string, error) {
+	n, err := rand.Int(reader, big.NewInt(int64(len(s))))
 	if err != nil {
 		return "", err
 	}
